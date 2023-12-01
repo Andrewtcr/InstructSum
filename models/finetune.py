@@ -1,4 +1,3 @@
-# %%
 import transformers
 from transformers import (
     AutoTokenizer,
@@ -20,6 +19,8 @@ max_target = 128
 model_checkpoint = "facebook/bart-large-cnn"
 model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint)
 tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
+
+RESUME_FROM_CHECKPOINT = True
 
 metric = load("rouge")
 
@@ -86,36 +87,37 @@ def compute_metrics(eval_pred):
 
 
 def main():
-    raw_datasets = load_from_disk("../data/hf_dataset")
+    raw_datasets = load_from_disk("/home/andrew/InstructSum/data/hf_dataset")
 
-    # Define the sample sizes
-    train_sample_size = 50  # Adjust as needed
-    val_sample_size = 5  # Adjust as needed
-    test_sample_size = 5  # Adjust as needed
+    # # Define the sample sizes
+    # train_sample_size = 50  # Adjust as needed
+    # val_sample_size = 5  # Adjust as needed
+    # test_sample_size = 5  # Adjust as needed
 
-    # Sample the datasets
-    sampled_datasets = DatasetDict(
-        {
-            "train": raw_datasets["train"]
-            .shuffle(seed=42)
-            .select(range(train_sample_size)),
-            "validation": raw_datasets["validation"]
-            .shuffle(seed=42)
-            .select(range(val_sample_size)),
-            "test": raw_datasets["test"]
-            .shuffle(seed=42)
-            .select(range(test_sample_size)),
-        }
-    )
+    # # Sample the datasets
+    # sampled_datasets = DatasetDict(
+    #     {
+    #         "train": raw_datasets["train"]
+    #         .shuffle(seed=42)
+    #         .select(range(train_sample_size)),
+    #         "validation": raw_datasets["validation"]
+    #         .shuffle(seed=42)
+    #         .select(range(val_sample_size)),
+    #         "test": raw_datasets["test"]
+    #         .shuffle(seed=42)
+    #         .select(range(test_sample_size)),
+    #     }
+    # )
 
-    tokenized_data = sampled_datasets.map(preprocess_data, batched=True)
+    tokenized_data = raw_datasets.map(preprocess_data, batched=True)
 
     batch_size = 4
-    model_name = model_checkpoint.split("/")[-1]
+    # model_name = model_checkpoint.split("/")[-1]
     args = Seq2SeqTrainingArguments(
-        f"{model_name}-finetuned",
+        f"BART-SFT",
         evaluation_strategy="steps",
-        eval_steps=0.25,
+        eval_steps=150,
+        warmup_steps=500,
         learning_rate=2e-5,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
@@ -124,11 +126,11 @@ def main():
         logging_dir="./log",
         logging_first_step=True,
         logging_steps=5,
-        save_total_limit=5,
+        save_total_limit=3,
         save_strategy="steps",
-        save_steps=10,
+        save_steps=150,
         load_best_model_at_end=True,
-        num_train_epochs=1,
+        num_train_epochs=25,
         predict_with_generate=True,
         fp16=True,
     )
@@ -145,7 +147,7 @@ def main():
         compute_metrics=compute_metrics,
     )
 
-    trainer.train()
+    trainer.train(resume_from_checkpoint=RESUME_FROM_CHECKPOINT)
     trainer.save_model("output")
     trainer.save_state()
 
