@@ -1,6 +1,6 @@
 python api_request_parallel_processor.py \
-  --requests_filepath gpt-4-test-prompts.jsonl \
-  --save_filepath gpt-4-test-output.jsonl \
+  --requests_filepath ../data/gpt-4-test-prompts.jsonl \
+  --save_filepath ../data/gpt-4-test-output.jsonl \
   --request_url https://api.openai.com/v1/chat/completions \
   --max_requests_per_minute 5000 \
   --max_tokens_per_minute 300000 \
