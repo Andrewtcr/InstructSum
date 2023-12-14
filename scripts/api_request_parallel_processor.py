@@ -1,3 +1,4 @@
+# START: COPIED FROM https://github.com/openai/openai-cookbook/blob/main/examples/api_request_parallel_processor.py
 """
 API REQUEST PARALLEL PROCESSOR
 
@@ -506,3 +507,4 @@ with open(filename, "w") as f:
 
 As with all jsonl files, take care that newlines in the content are properly escaped (json.dumps does this automatically).
 """
+#END: COPIED FROM https://github.com/openai/openai-cookbook/blob/main/examples/api_request_parallel_processor.py
