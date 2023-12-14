@@ -5,6 +5,8 @@ from transformers import (
     DataCollatorForSeq2Seq,
     Seq2SeqTrainingArguments,
     Seq2SeqTrainer,
+    BartConfig,
+    TrainerCallback
 )
 from datasets import load_dataset, load_from_disk, DatasetDict
 import numpy as np
@@ -17,12 +19,40 @@ max_input = 1024
 max_target = 128
 
 model_checkpoint = "facebook/bart-large-cnn"
-model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint)
+config = BartConfig.from_pretrained(model_checkpoint)
+
+# Add dropout
+# config.dropout= 0.5
+# config.attention_dropout = 0.5
+
+model = AutoModelForSeq2SeqLM.from_pretrained(model_checkpoint, config=config)
 tokenizer = AutoTokenizer.from_pretrained(model_checkpoint)
 
-RESUME_FROM_CHECKPOINT = True
-
 metric = load("rouge")
+
+
+class EarlyStoppingCallback(TrainerCallback):
+    def __init__(self, early_stopping_patience: int, early_stopping_threshold: float, metric: str):
+        self.early_stopping_patience = early_stopping_patience
+        self.early_stopping_threshold = early_stopping_threshold
+        self.metric = metric
+        self.best_score = None
+        self.patience_counter = 0
+
+    def on_evaluate(self, args, state, control, **kwargs):
+        # Check if the current evaluation loss is better (less) than the previous best
+        current_score = kwargs["metrics"][self.metric]
+        if self.best_score is None or current_score < self.best_score - self.early_stopping_threshold:
+            self.best_score = current_score
+            self.patience_counter = 0
+        else:
+            self.patience_counter += 1
+
+        # Check if patience has run out
+        if self.patience_counter >= self.early_stopping_patience:
+            print("Early stopping triggered")
+            control.should_training_stop = True
+
 
 
 def preprocess_data(examples):
@@ -88,51 +118,40 @@ def compute_metrics(eval_pred):
 
 def main():
     raw_datasets = load_from_disk("/home/andrew/InstructSum/data/hf_dataset")
-
-    # # Define the sample sizes
-    # train_sample_size = 50  # Adjust as needed
-    # val_sample_size = 5  # Adjust as needed
-    # test_sample_size = 5  # Adjust as needed
-
-    # # Sample the datasets
-    # sampled_datasets = DatasetDict(
-    #     {
-    #         "train": raw_datasets["train"]
-    #         .shuffle(seed=42)
-    #         .select(range(train_sample_size)),
-    #         "validation": raw_datasets["validation"]
-    #         .shuffle(seed=42)
-    #         .select(range(val_sample_size)),
-    #         "test": raw_datasets["test"]
-    #         .shuffle(seed=42)
-    #         .select(range(test_sample_size)),
-    #     }
-    # )
+    raw_datasets.shuffle(seed=42)
 
     tokenized_data = raw_datasets.map(preprocess_data, batched=True)
 
     batch_size = 4
-    # model_name = model_checkpoint.split("/")[-1]
+    model_name = "BART-SFT-r1"
+    eval_metric = "rouge1"
     args = Seq2SeqTrainingArguments(
-        f"BART-SFT",
+        model_name,
         evaluation_strategy="steps",
-        eval_steps=150,
+        eval_steps=200,
         warmup_steps=500,
-        learning_rate=2e-5,
+        learning_rate=5e-6,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         weight_decay=0.01,
         log_level="info",
-        logging_dir="./log",
+        logging_dir=f"./logs/{model_name}",
         logging_first_step=True,
         logging_steps=5,
         save_total_limit=3,
         save_strategy="steps",
-        save_steps=150,
+        save_steps=200,
         load_best_model_at_end=True,
-        num_train_epochs=25,
+        metric_for_best_model=eval_metric,
+        num_train_epochs=10,
         predict_with_generate=True,
         fp16=True,
+    )
+    
+    early_stopping_callback = EarlyStoppingCallback(
+        early_stopping_patience=5,  # Number of evaluations to wait without improvement
+        early_stopping_threshold=0.0,  # Minimum change to qualify as an improvement
+        metric=eval_metric
     )
 
     data_collator = DataCollatorForSeq2Seq(tokenizer, model=model)
@@ -145,11 +164,12 @@ def main():
         data_collator=data_collator,
         tokenizer=tokenizer,
         compute_metrics=compute_metrics,
+        # callbacks=[early_stopping_callback]
     )
 
-    trainer.train(resume_from_checkpoint=RESUME_FROM_CHECKPOINT)
-    trainer.save_model("output")
-    trainer.save_state()
+    trainer.train(resume_from_checkpoint=True)
+    # trainer.save_model("output")
+    # trainer.save_state()
 
 
 if __name__ == "__main__":
