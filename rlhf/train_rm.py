@@ -1,4 +1,5 @@
-# Adapted from https://github.com/CarperAI/trlx/tree/main
+# Adapted from https://github.com/CarperAI/trlx/tree/main. Not much code was directly copied as the original code was meant for GPT-J,
+# which is decoder only whereas BART is encoder-decoder, thus requiring significant modifications.
 
 import os
 
@@ -115,7 +116,7 @@ class BARTRewardModel(nn.Module):
         rewards = self.v_head(hidden_states).squeeze(-1)
         reward_scores = []
         bs = input_ids.shape[0] // 2
-	# Note half is chosen and another half is rejected.
+	    # Note half is chosen and another half is rejected.
         chosen = input_ids[:bs]
         rejected = input_ids[bs:]
         chosen_rewards = rewards[:bs]
@@ -192,7 +193,7 @@ if __name__ == "__main__":
         bf16=False,
         learning_rate=1e-5,
         save_total_limit=1,
-        # deepspeed = "ds_config.json"
+        deepspeed = "ds_config.json"
     )
 
 
