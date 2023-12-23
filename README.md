@@ -1,4 +1,5 @@
 # InstructSum
+Course project for Natural Language Generation and Summarization, COMS 6998 Section 11 (Fall 2023) with Professor Kathleen McKeown.
 Note: I do not provide any dataset, data pre/post-processed files, or model checkpoints in this repo due to their large size. 
 
 ## Data Downloading / Generation / Preprocessing
